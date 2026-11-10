@@ -765,7 +765,14 @@ int rename(IOState &io, const char *old_name, const char *new_name, const fs::pa
         return IO_ERROR(SCE_ERROR_ERRNO_ENOENT);
     }
 
-    const auto translated_new_path = translate_path(new_name, device, io.device_paths);
+    // translate_path rewrites device (savedata0: -> ux0:), so new_name needs its own
+    auto new_device = device::get_device(new_name);
+    if (new_device == VitaIoDevice::_INVALID) {
+        LOG_ERROR("Cannot find device for path: {}", new_name);
+        return IO_ERROR(SCE_ERROR_ERRNO_ENOENT);
+    }
+
+    const auto translated_new_path = translate_path(new_name, new_device, io.device_paths);
     if (translated_new_path.empty()) {
         LOG_ERROR("Cannot translate path: {}", translated_new_path);
         return IO_ERROR(SCE_ERROR_ERRNO_ENOENT);
@@ -777,7 +784,7 @@ int rename(IOState &io, const char *old_name, const char *new_name, const fs::pa
         return IO_ERROR(SCE_ERROR_ERRNO_ENOENT);
     }
 
-    const auto emulated_new_path = device::construct_emulated_path(device, translated_new_path, vita_fs_path, io.redirect_stdio);
+    const auto emulated_new_path = device::construct_emulated_path(new_device, translated_new_path, vita_fs_path, io.redirect_stdio);
 
     LOG_TRACE_IF(log_file_op, "{}: Renaming file {} to {} ({} to {})", export_name, old_name, new_name, emulated_old_path, emulated_new_path);
 
