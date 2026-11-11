@@ -5,9 +5,9 @@
 #   ./build-macos.sh --no-install   build only
 #
 # Locally built Vita3K is ad-hoc signed, so macOS treats each build as a new
-# app. If its old Documents-folder permission record lingers, file access in
-# ~/Documents (where pref-path usually lives) blocks forever and games hang
-# at boot. This script resets that record so macOS asks again on first launch.
+# app. If an old Documents/Downloads permission record lingers, file access
+# under pref-path can block with no prompt shown and games hang at boot.
+# This script resets those records so macOS asks again on first launch.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -25,8 +25,10 @@ cmake --build build/macos-ninja --config Release
 # Purpose string for the Documents prompt (Vita3K doesn't ship one).
 PLIST="$APP_SRC/Contents/Info.plist"
 chmod u+w "$PLIST"
-plutil -replace NSDocumentsFolderUsageDescription \
-    -string "Vita3K stores games and save data in your Documents folder." "$PLIST"
+for folder in Documents Downloads; do
+    plutil -replace "NS${folder}FolderUsageDescription" \
+        -string "Vita3K stores games and save data in your $folder folder." "$PLIST"
+done
 codesign --force --deep -s - "$APP_SRC"
 
 [[ "${1:-}" == "--no-install" ]] && { echo "Built: $APP_SRC"; exit 0; }
@@ -41,11 +43,15 @@ fi
 ditto "$APP_SRC" "$APP_DST"
 
 tccutil reset SystemPolicyDocumentsFolder "$BUNDLE_ID"
+tccutil reset SystemPolicyDownloadsFolder "$BUNDLE_ID"
 
 cat <<EOF
 
 Installed $APP_DST
 First launch: close the Welcome window, then click Allow when macOS asks
-for Documents access. If no prompt appears, enable it manually:
-System Settings > Privacy & Security > Files & Folders > Vita3K > Documents
+for folder access. If no prompt appears, enable it manually:
+System Settings > Privacy & Security > Files & Folders > Vita3K
+
+Keep pref-path out of iCloud-synced folders (Desktop/Documents with
+"Optimize Mac Storage"): evicted game files stall loading for minutes.
 EOF
